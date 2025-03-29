@@ -60,7 +60,7 @@ class Memory(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     importance = Column(Float, default=0.5)  # 重要性评分，0-1
     category = Column(String(50), nullable=True)  # 记忆类别（如个人信息、偏好、任务等）
-    metadata = Column(JSON, nullable=True)  # 元数据，JSON格式
+    meta_data = Column(JSON, nullable=True)  # 元数据，JSON格式
     is_active = Column(Boolean, default=True)  # 是否激活（用于软删除）
     embedding_id = Column(String(100), nullable=True)  # 向量数据库中的ID
     
