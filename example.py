@@ -234,10 +234,7 @@ async def chat_example(user_id):
         query="日本旅行"
     )
     
-    print(f"搜索结果: {json.dumps([{
-        'content': mem['content'],
-        'relevance': mem.get('relevance', 0)
-    } for mem in search_results], ensure_ascii=False, indent=2)}")
+    print(f"搜索结果: {json.dumps([{'content': mem['content'],'relevance': mem.get('relevance', 0)} for mem in search_results], ensure_ascii=False, indent=2)}")
     
     # 关闭连接
     await redis_client.close()
