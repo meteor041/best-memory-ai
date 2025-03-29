@@ -78,21 +78,36 @@ class VectorStore:
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if openai_api_key:
             try:
+                # 尝试使用新的嵌入模型
+                print("尝试使用OpenAI的text-embedding-3-small模型...")
                 return embedding_functions.OpenAIEmbeddingFunction(
                     api_key=openai_api_key,
-                    model_name="text-embedding-ada-002"
+                    model_name="text-embedding-3-small"
                 )
             except Exception as e:
-                print(f"OpenAI嵌入函数初始化失败: {e}")
+                print(f"OpenAI text-embedding-3-small初始化失败: {e}")
+                try:
+                    # 如果新模型失败，尝试使用旧模型
+                    print("尝试使用OpenAI的text-embedding-ada-002模型...")
+                    return embedding_functions.OpenAIEmbeddingFunction(
+                        api_key=openai_api_key,
+                        model_name="text-embedding-ada-002"
+                    )
+                except Exception as e:
+                    print(f"OpenAI text-embedding-ada-002初始化失败: {e}")
+                    print(f"错误类型: {type(e)}")
+                    print(f"错误详情: {str(e)}")
         
         # 如果所有API都不可用，使用默认的嵌入函数
         print("警告: 所有嵌入API都不可用，使用默认的嵌入函数")
+        print("注意: 默认嵌入函数性能较差，建议配置至少一个嵌入API")
+        print("可用的嵌入API选项: OpenAI, DeepSeek, OpenRouter")
         return embedding_functions.DefaultEmbeddingFunction()
     
     async def add_memory(
-        self, 
-        text: str, 
-        metadata: Optional[Dict[str, Any]] = None, 
+        self,
+        text: str,
+        metadata: Optional[Dict[str, Any]] = None,
         id: Optional[str] = None
     ) -> str:
         """
@@ -106,23 +121,63 @@ class VectorStore:
         Returns:
             记忆ID
         """
-        memory_id = id or str(uuid.uuid4())
-        
-        # 确保元数据中的所有值都是字符串
-        if metadata:
-            for key, value in metadata.items():
-                if isinstance(value, (dict, list)):
-                    metadata[key] = json.dumps(value)
-                elif not isinstance(value, str):
-                    metadata[key] = str(value)
-        
-        self.collection.add(
-            documents=[text],
-            metadatas=[metadata or {}],
-            ids=[memory_id]
-        )
-        
-        return memory_id
+        try:
+            memory_id = id or str(uuid.uuid4())
+            
+            # 确保元数据中的所有值都是字符串
+            if metadata:
+                for key, value in metadata.items():
+                    if isinstance(value, (dict, list)):
+                        metadata[key] = json.dumps(value)
+                    elif not isinstance(value, str):
+                        metadata[key] = str(value)
+            
+            print(f"正在添加记忆，ID: {memory_id}, 文本长度: {len(text)}")
+            
+            try:
+                self.collection.add(
+                    documents=[text],
+                    metadatas=[metadata or {}],
+                    ids=[memory_id]
+                )
+                print(f"记忆添加成功，ID: {memory_id}")
+                return memory_id
+            except Exception as e:
+                print(f"添加记忆到向量数据库失败: {e}")
+                print(f"错误类型: {type(e)}")
+                print(f"错误详情: {str(e)}")
+                
+                # 检查是否是OpenAI API错误
+                if "openai.NotFoundError" in str(type(e)):
+                    print("OpenAI API错误: 模型或资源不存在")
+                    print("请检查您的OpenAI API密钥和模型名称是否正确")
+                    print("建议: 更新到最新的OpenAI嵌入模型，如text-embedding-3-small")
+                
+                # 尝试使用默认嵌入函数作为备选
+                print("尝试使用默认嵌入函数作为备选...")
+                try:
+                    # 临时切换到默认嵌入函数
+                    original_embedding_function = self.collection._embedding_function
+                    self.collection._embedding_function = embedding_functions.DefaultEmbeddingFunction()
+                    
+                    self.collection.add(
+                        documents=[text],
+                        metadatas=[metadata or {}],
+                        ids=[memory_id]
+                    )
+                    
+                    print(f"使用默认嵌入函数添加记忆成功，ID: {memory_id}")
+                    
+                    # 恢复原始嵌入函数
+                    self.collection._embedding_function = original_embedding_function
+                    
+                    return memory_id
+                except Exception as backup_error:
+                    print(f"使用默认嵌入函数添加记忆失败: {backup_error}")
+                    raise
+        except Exception as outer_error:
+            print(f"添加记忆过程中发生未处理异常: {outer_error}")
+            raise
     
     async def search_memories(
         self, 
