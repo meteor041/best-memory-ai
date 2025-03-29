@@ -37,4 +37,12 @@ async def root():
     return {"status": "ok", "message": "Memory-Enhanced AI Chat System is running"}
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8083, reload=True)
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8083,
+        reload=False,  # 生产环境关闭热重载
+        workers=4,    # 生产环境建议多worker
+        ssl_keyfile="/path/to/key.pem",  # 如需直接HTTPS
+        ssl_certfile="/path/to/cert.pem"
+    )
