@@ -295,7 +295,10 @@ class LongTermMemory:
         for vector_result in vector_results:
             # 通过embedding_id查找PostgreSQL中的记忆
             memory = None
-            async for mem in self.postgres_client.get_user_memories(user_id):
+            # 获取用户记忆列表（这是一个普通列表，不是异步迭代器）
+            memories = await self.postgres_client.get_user_memories(user_id)
+            # 使用普通for循环而不是async for
+            for mem in memories:
                 if mem.embedding_id == vector_result["id"]:
                     memory = mem
                     break
