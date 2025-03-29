@@ -275,17 +275,27 @@ class VectorStore:
             记忆，包含id、text和metadata字段，如果不存在则返回None
         """
         try:
-            result = self.collection.get(ids=[id])
+            print(f"正在获取记忆，ID: {id}")
             
-            if result["documents"] and len(result["documents"]) > 0:
-                return {
-                    "id": id,
-                    "text": result["documents"][0],
-                    "metadata": result["metadatas"][0] if result["metadatas"] else {}
-                }
-            return None
-        except Exception as e:
-            print(f"获取记忆失败: {e}")
+            try:
+                result = self.collection.get(ids=[id])
+                
+                if result["documents"] and len(result["documents"]) > 0:
+                    print(f"记忆获取成功，ID: {id}")
+                    return {
+                        "id": id,
+                        "text": result["documents"][0],
+                        "metadata": result["metadatas"][0] if result["metadatas"] else {}
+                    }
+                print(f"记忆不存在，ID: {id}")
+                return None
+            except Exception as e:
+                print(f"获取记忆失败: {e}")
+                print(f"错误类型: {type(e)}")
+                print(f"错误详情: {str(e)}")
+                return None
+        except Exception as outer_error:
+            print(f"获取记忆过程中发生未处理异常: {outer_error}")
             return None
     
     async def update_memory(
