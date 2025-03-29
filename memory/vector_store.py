@@ -180,9 +180,9 @@ class VectorStore:
             raise
     
     async def search_memories(
-        self, 
-        query: str, 
-        filter: Optional[Dict[str, Any]] = None, 
+        self,
+        query: str,
+        filter: Optional[Dict[str, Any]] = None,
         limit: int = 5
     ) -> List[Dict[str, Any]]:
         """
@@ -196,31 +196,73 @@ class VectorStore:
         Returns:
             记忆列表，每个记忆包含id、text、metadata和distance字段
         """
-        # 确保过滤条件中的所有值都是字符串
-        if filter:
-            for key, value in filter.items():
-                if isinstance(value, (dict, list)):
-                    filter[key] = json.dumps(value)
-                elif not isinstance(value, str):
-                    filter[key] = str(value)
-        
-        results = self.collection.query(
-            query_texts=[query],
-            n_results=limit,
-            where=filter
-        )
-        
-        memories = []
-        if results["documents"] and len(results["documents"][0]) > 0:
-            for i in range(len(results["documents"][0])):
-                memories.append({
-                    "id": results["ids"][0][i],
-                    "text": results["documents"][0][i],
-                    "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                    "distance": results["distances"][0][i] if "distances" in results and results["distances"] else None
-                })
-        
-        return memories
+        try:
+            print(f"正在搜索记忆，查询: '{query}'")
+            
+            # 确保过滤条件中的所有值都是字符串
+            if filter:
+                for key, value in filter.items():
+                    if isinstance(value, (dict, list)):
+                        filter[key] = json.dumps(value)
+                    elif not isinstance(value, str):
+                        filter[key] = str(value)
+                print(f"应用过滤条件: {filter}")
+            
+            try:
+                results = self.collection.query(
+                    query_texts=[query],
+                    n_results=limit,
+                    where=filter
+                )
+                print(f"搜索成功，找到 {len(results['documents'][0]) if results['documents'] and len(results['documents']) > 0 else 0} 条结果")
+            except Exception as e:
+                print(f"搜索记忆失败: {e}")
+                print(f"错误类型: {type(e)}")
+                print(f"错误详情: {str(e)}")
+                
+                # 检查是否是OpenAI API错误
+                if "openai.NotFoundError" in str(type(e)):
+                    print("OpenAI API错误: 模型或资源不存在")
+                    print("请检查您的OpenAI API密钥和模型名称是否正确")
+                    print("建议: 更新到最新的OpenAI嵌入模型，如text-embedding-3-small")
+                
+                # 尝试使用默认嵌入函数作为备选
+                print("尝试使用默认嵌入函数作为备选...")
+                try:
+                    # 临时切换到默认嵌入函数
+                    original_embedding_function = self.collection._embedding_function
+                    self.collection._embedding_function = embedding_functions.DefaultEmbeddingFunction()
+                    
+                    results = self.collection.query(
+                        query_texts=[query],
+                        n_results=limit,
+                        where=filter
+                    )
+                    
+                    print(f"使用默认嵌入函数搜索成功，找到 {len(results['documents'][0]) if results['documents'] and len(results['documents']) > 0 else 0} 条结果")
+                    
+                    # 恢复原始嵌入函数
+                    self.collection._embedding_function = original_embedding_function
+                except Exception as backup_error:
+                    print(f"使用默认嵌入函数搜索失败: {backup_error}")
+                    # 如果备选方案也失败，返回空结果
+                    return []
+            
+            memories = []
+            if results["documents"] and len(results["documents"][0]) > 0:
+                for i in range(len(results["documents"][0])):
+                    memories.append({
+                        "id": results["ids"][0][i],
+                        "text": results["documents"][0][i],
+                        "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
+                        "distance": results["distances"][0][i] if "distances" in results and results["distances"] else None
+                    })
+            
+            return memories
+        except Exception as outer_error:
+            print(f"搜索记忆过程中发生未处理异常: {outer_error}")
+            # 返回空结果
+            return []
     
     async def get_memory(self, id: str) -> Optional[Dict[str, Any]]:
         """
