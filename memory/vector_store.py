@@ -5,6 +5,7 @@ from chromadb.config import Settings
 from chromadb.utils import embedding_functions
 from typing import List, Dict, Any, Optional, Tuple, Union
 import json
+import httpx
 
 class VectorStore:
     """向量数据库接口，用于存储和检索向量化的记忆"""
@@ -26,11 +27,8 @@ class VectorStore:
             anonymized_telemetry=False
         ))
         
-        # 使用OpenAI的嵌入函数
-        self.embedding_function = embedding_functions.OpenAIEmbeddingFunction(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            model_name="text-embedding-ada-002"
-        )
+        # 选择嵌入函数
+        self.embedding_function = self._get_embedding_function()
         
         # 获取或创建集合
         try:
@@ -43,6 +41,53 @@ class VectorStore:
                 name=self.collection_name,
                 embedding_function=self.embedding_function
             )
+    
+    def _get_embedding_function(self):
+        """
+        根据环境变量选择嵌入函数
+        
+        Returns:
+            嵌入函数
+        """
+        # 尝试使用OpenRouter的嵌入API
+        openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+        if openrouter_api_key:
+            try:
+                return embedding_functions.OpenAIEmbeddingFunction(
+                    api_key=openrouter_api_key,
+                    model_name="text-embedding-ada-002",
+                    api_base="https://openrouter.ai/api/v1"
+                )
+            except Exception as e:
+                print(f"OpenRouter嵌入函数初始化失败: {e}")
+        
+        # 尝试使用DeepSeek的嵌入API
+        deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
+        if deepseek_api_key:
+            try:
+                # 如果DeepSeek提供了与OpenAI兼容的嵌入API，可以使用这个
+                return embedding_functions.OpenAIEmbeddingFunction(
+                    api_key=deepseek_api_key,
+                    model_name="deepseek-embedding",
+                    api_base="https://api.deepseek.com/v1"
+                )
+            except Exception as e:
+                print(f"DeepSeek嵌入函数初始化失败: {e}")
+        
+        # 尝试使用OpenAI的嵌入API
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if openai_api_key:
+            try:
+                return embedding_functions.OpenAIEmbeddingFunction(
+                    api_key=openai_api_key,
+                    model_name="text-embedding-ada-002"
+                )
+            except Exception as e:
+                print(f"OpenAI嵌入函数初始化失败: {e}")
+        
+        # 如果所有API都不可用，使用默认的嵌入函数
+        print("警告: 所有嵌入API都不可用，使用默认的嵌入函数")
+        return embedding_functions.DefaultEmbeddingFunction()
     
     async def add_memory(
         self, 

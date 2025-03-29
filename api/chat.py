@@ -12,6 +12,8 @@ from memory.vector_store import VectorStore
 from llm.base import BaseLLM
 from llm.openai_api import OpenAIClient
 from llm.anthropic_api import AnthropicClient
+from llm.deepseek_api import DeepSeekClient
+from llm.openrouter_api import OpenRouterClient
 
 # 创建路由器
 router = APIRouter()
@@ -22,12 +24,46 @@ postgres_client = PostgresClient()
 vector_store = VectorStore()
 
 # 创建LLM客户端
-openai_client = OpenAIClient()
-anthropic_client = AnthropicClient()
+try:
+    openai_client = OpenAIClient()
+except Exception as e:
+    print(f"OpenAI客户端初始化失败: {e}")
+    openai_client = None
+
+try:
+    anthropic_client = AnthropicClient()
+except Exception as e:
+    print(f"Anthropic客户端初始化失败: {e}")
+    anthropic_client = None
+
+try:
+    deepseek_client = DeepSeekClient()
+except Exception as e:
+    print(f"DeepSeek客户端初始化失败: {e}")
+    deepseek_client = None
+
+try:
+    openrouter_client = OpenRouterClient()
+except Exception as e:
+    print(f"OpenRouter客户端初始化失败: {e}")
+    openrouter_client = None
+
+# 选择默认LLM客户端
+default_llm_client = None
+if deepseek_client:
+    default_llm_client = deepseek_client
+elif openrouter_client:
+    default_llm_client = openrouter_client
+elif openai_client:
+    default_llm_client = openai_client
+elif anthropic_client:
+    default_llm_client = anthropic_client
+else:
+    raise ValueError("没有可用的LLM客户端")
 
 # 创建记忆管理器
 short_term_memory = ShortTermMemory(redis_client, postgres_client)
-long_term_memory = LongTermMemory(postgres_client, redis_client, vector_store, openai_client)
+long_term_memory = LongTermMemory(postgres_client, redis_client, vector_store, default_llm_client)
 
 # 模型
 class Message(BaseModel):
@@ -38,7 +74,7 @@ class ChatRequest(BaseModel):
     user_id: str = Field(..., description="用户ID")
     conversation_id: Optional[str] = Field(None, description="对话ID，如果为空则创建新对话")
     message: str = Field(..., description="用户消息")
-    model: str = Field("gpt-4", description="使用的模型")
+    model: str = Field("deepseek-chat", description="使用的模型")
     use_memory: bool = Field(True, description="是否使用记忆")
     system_message: Optional[str] = Field(None, description="系统消息")
 
@@ -57,7 +93,25 @@ async def chat(
     聊天API
     """
     # 获取LLM客户端
-    llm_client = openai_client if "gpt" in request.model.lower() else anthropic_client
+    llm_client = None
+    model_name = request.model.lower()
+    
+    if "deepseek" in model_name and deepseek_client:
+        llm_client = deepseek_client
+    elif "openrouter" in model_name or "/" in model_name:
+        # OpenRouter模型通常包含"/"，如"openai/gpt-4"
+        if openrouter_client:
+            llm_client = openrouter_client
+    elif "gpt" in model_name or "openai" in model_name:
+        if openai_client:
+            llm_client = openai_client
+    elif "claude" in model_name or "anthropic" in model_name:
+        if anthropic_client:
+            llm_client = anthropic_client
+    
+    # 如果没有找到匹配的客户端，使用默认客户端
+    if not llm_client:
+        llm_client = default_llm_client
     
     # 获取或创建对话
     conversation_id = request.conversation_id

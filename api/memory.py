@@ -8,6 +8,9 @@ from db.postgres_client import PostgresClient
 from memory.long_term import LongTermMemory
 from memory.vector_store import VectorStore
 from llm.openai_api import OpenAIClient
+from llm.deepseek_api import DeepSeekClient
+from llm.openrouter_api import OpenRouterClient
+from llm.anthropic_api import AnthropicClient
 
 # 创建路由器
 router = APIRouter()
@@ -16,10 +19,47 @@ router = APIRouter()
 redis_client = RedisClient()
 postgres_client = PostgresClient()
 vector_store = VectorStore()
-openai_client = OpenAIClient()
+
+# 创建LLM客户端
+try:
+    openai_client = OpenAIClient()
+except Exception as e:
+    print(f"OpenAI客户端初始化失败: {e}")
+    openai_client = None
+
+try:
+    deepseek_client = DeepSeekClient()
+except Exception as e:
+    print(f"DeepSeek客户端初始化失败: {e}")
+    deepseek_client = None
+
+try:
+    openrouter_client = OpenRouterClient()
+except Exception as e:
+    print(f"OpenRouter客户端初始化失败: {e}")
+    openrouter_client = None
+
+try:
+    anthropic_client = AnthropicClient()
+except Exception as e:
+    print(f"Anthropic客户端初始化失败: {e}")
+    anthropic_client = None
+
+# 选择默认LLM客户端
+default_llm_client = None
+if deepseek_client:
+    default_llm_client = deepseek_client
+elif openrouter_client:
+    default_llm_client = openrouter_client
+elif openai_client:
+    default_llm_client = openai_client
+elif anthropic_client:
+    default_llm_client = anthropic_client
+else:
+    raise ValueError("没有可用的LLM客户端")
 
 # 创建长期记忆管理器
-long_term_memory = LongTermMemory(postgres_client, redis_client, vector_store, openai_client)
+long_term_memory = LongTermMemory(postgres_client, redis_client, vector_store, default_llm_client)
 
 # 模型
 class MemoryCreate(BaseModel):

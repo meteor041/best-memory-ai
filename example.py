@@ -17,6 +17,9 @@ from memory.vector_store import VectorStore
 from memory.short_term import ShortTermMemory
 from memory.long_term import LongTermMemory
 from llm.openai_api import OpenAIClient
+from llm.deepseek_api import DeepSeekClient
+from llm.openrouter_api import OpenRouterClient
+from llm.anthropic_api import AnthropicClient
 
 # 示例用户ID
 USER_ID = "user-123"
@@ -38,13 +41,52 @@ async def setup_database():
     
     return user.id
 
+def get_llm_client():
+    """获取LLM客户端，按优先级尝试不同的客户端"""
+    # 尝试创建DeepSeek客户端
+    try:
+        if os.getenv("DEEPSEEK_API_KEY"):
+            print("使用DeepSeek API")
+            return DeepSeekClient()
+    except Exception as e:
+        print(f"DeepSeek客户端初始化失败: {e}")
+    
+    # 尝试创建OpenRouter客户端
+    try:
+        if os.getenv("OPENROUTER_API_KEY"):
+            print("使用OpenRouter API")
+            return OpenRouterClient()
+    except Exception as e:
+        print(f"OpenRouter客户端初始化失败: {e}")
+    
+    # 尝试创建OpenAI客户端
+    try:
+        if os.getenv("OPENAI_API_KEY"):
+            print("使用OpenAI API")
+            return OpenAIClient()
+    except Exception as e:
+        print(f"OpenAI客户端初始化失败: {e}")
+    
+    # 尝试创建Anthropic客户端
+    try:
+        if os.getenv("ANTHROPIC_API_KEY"):
+            print("使用Anthropic API")
+            return AnthropicClient()
+    except Exception as e:
+        print(f"Anthropic客户端初始化失败: {e}")
+    
+    # 如果所有客户端都初始化失败，抛出异常
+    raise ValueError("没有可用的LLM客户端，请检查API密钥配置")
+
 async def chat_example(user_id):
     """聊天示例"""
     # 创建客户端
     redis_client = RedisClient()
     postgres_client = PostgresClient()
     vector_store = VectorStore()
-    llm_client = OpenAIClient()
+    llm_client = get_llm_client()
+    
+    print(f"使用模型: {llm_client.get_model_name()}")
     
     # 创建记忆管理器
     short_term = ShortTermMemory(redis_client, postgres_client)
@@ -192,7 +234,10 @@ async def chat_example(user_id):
         query="日本旅行"
     )
     
-    print(f"搜索结果: {json.dumps([{'content': mem['content'],'relevance': mem.get('relevance', 0)} for mem in search_results], ensure_ascii=False, indent=2)}")
+    print(f"搜索结果: {json.dumps([{
+        'content': mem['content'],
+        'relevance': mem.get('relevance', 0)
+    } for mem in search_results], ensure_ascii=False, indent=2)}")
     
     # 关闭连接
     await redis_client.close()
