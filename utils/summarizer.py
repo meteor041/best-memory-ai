@@ -136,70 +136,97 @@ class ConversationSummarizer:
         Returns:
             关键信息，JSON格式
         """
-        conversation_text = "\n".join([
-            f"{msg['role']}: {msg['content']}" for msg in messages
-        ])
-        
-        prompt = f"""请从以下对话中提取关键信息，并以JSON格式返回。
-        
-        对话内容：
-        {conversation_text}
-
-        请以以下JSON格式返回关键信息：
-        ```json
-        {
-            "personal_info": {
-                "name": "用户名称（如果提到）",
-                "preferences": ["偏好1", "偏好2", ...],
-                "background": "背景信息"
-            },
-            "tasks": [
-                {"description": "任务描述", "deadline": "截止日期（如果提到）", "priority": "优先级（如果提到）"},
-                ...
-            ],
-            "questions": ["用户提出的问题1", ...],
-            "important_dates": [
-                {"event": "事件描述", "date": "日期"}
-            ]
-        }
-        ```
-
-        只返回JSON格式的信息，不要添加其他解释。如果某些字段没有相关信息，可以留空或省略。"""
-        
-        # 调用LLM提取关键信息
-        info_text = await self.llm_client.generate_text(prompt)
-        
-        # 解析为JSON格式
         try:
-            info_json = json.loads(info_text)
-            return info_json
-        except json.JSONDecodeError:
-            # 如果解析失败，尝试提取JSON部分
+            print("开始提取关键信息...")
+            print(f"消息数量: {len(messages)}")
+            
+            conversation_text = "\n".join([
+                f"{msg['role']}: {msg['content']}" for msg in messages
+            ])
+            
+            print(f"对话文本长度: {len(conversation_text)}")
+            
+            # 使用简单字符串而不是f-string，看看是否解决问题
+            prompt = f"""请从以下对话中提取关键信息，并以JSON格式返回。
+        
+对话内容：
+{conversation_text}
+
+请以以下JSON格式返回关键信息：
+```json
+{{
+    "personal_info": {{
+        "name": "用户名称（如果提到）",
+        "preferences": ["偏好1", "偏好2", ...],
+        "background": "背景信息"
+    }},
+    "tasks": [
+        {{"description": "任务描述", "deadline": "截止日期（如果提到）", "priority": "优先级（如果提到）"}},
+        ...
+    ],
+    "questions": ["用户提出的问题1", ...],
+    "important_dates": [
+        {{"event": "事件描述", "date": "日期"}}
+    ]
+}}
+```
+
+只返回JSON格式的信息，不要添加其他解释。如果某些字段没有相关信息，可以留空或省略。"""
+            
+            print("提示构建完成，长度:", len(prompt))
+            print("开始调用LLM...")
+            
+            # 调用LLM提取关键信息
+            info_text = await self.llm_client.generate_text(prompt)
+            
+            print("LLM响应完成，长度:", len(info_text))
+            print("开始解析JSON...")
+            
+            # 解析为JSON格式
             try:
-                import re
-                json_match = re.search(r'```json\n(.*?)\n```', info_text, re.DOTALL)
-                if json_match:
-                    info_json = json.loads(json_match.group(1))
-                    return info_json
-                
-                # 如果没有找到，尝试直接解析可能的JSON部分
-                json_match = re.search(r'(\{.*\})', info_text, re.DOTALL)
-                if json_match:
-                    info_json = json.loads(json_match.group(1))
-                    return info_json
-                
-                # 如果仍然失败，返回一个基本的结构
-                return {
-                    "personal_info": {},
-                    "tasks": [],
-                    "questions": [],
-                    "important_dates": []
-                }
-            except Exception as e:
-                # 如果所有尝试都失败，返回一个基本的结构
-                return {
-                    "personal_info": {},
-                    "tasks": [],
-                    "questions": [],
-                    "important_dates": []
-                }
+                info_json = json.loads(info_text)
+                return info_json
+            except json.JSONDecodeError as json_err:
+                print(f"JSON解析失败: {json_err}")
+                # 如果解析失败，尝试提取JSON部分
+                try:
+                    import re
+                    json_match = re.search(r'```json\n(.*?)\n```', info_text, re.DOTALL)
+                    if json_match:
+                        info_json = json.loads(json_match.group(1))
+                        return info_json
+                    
+                    # 如果没有找到，尝试直接解析可能的JSON部分
+                    json_match = re.search(r'(\{.*\})', info_text, re.DOTALL)
+                    if json_match:
+                        info_json = json.loads(json_match.group(1))
+                        return info_json
+                    
+                    # 如果仍然失败，返回一个基本的结构
+                    print("无法找到有效的JSON结构，返回默认结构")
+                    return {
+                        "personal_info": {},
+                        "tasks": [],
+                        "questions": [],
+                        "important_dates": []
+                    }
+                except Exception as e:
+                    print(f"JSON提取失败: {e}")
+                    # 如果所有尝试都失败，返回一个基本的结构
+                    return {
+                        "personal_info": {},
+                        "tasks": [],
+                        "questions": [],
+                        "important_dates": []
+                    }
+        except Exception as e:
+            print(f"提取关键信息时发生错误: {e}")
+            print(f"错误类型: {type(e)}")
+            import traceback
+            print(f"错误堆栈: {traceback.format_exc()}")
+            return {
+                "personal_info": {},
+                "tasks": [],
+                "questions": [],
+                "important_dates": []
+            }
